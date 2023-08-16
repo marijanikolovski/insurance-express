@@ -5,6 +5,7 @@ import ageRoute from './routes/ageRoutes';
 import discountRoute from './routes/discountRoutes';
 import coverageRoute from './routes/coverageRoutes';
 import cors from 'cors';
+import insuranceRoute from './routes/insuranceRoutes';
 
 const app = express();
 
@@ -23,6 +24,7 @@ app.use('/api', cityRoute);
 app.use('/api', ageRoute);
 app.use('/api', discountRoute);
 app.use('/api', coverageRoute);
+app.use('/api', insuranceRoute);
 
 app.listen(port, () => {
   console.log(`Server is running on port ${port}`);

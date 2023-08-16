@@ -5,8 +5,8 @@ import { ageService } from '../services/ageSerivce';
 class AgeController {
   async crateAge(req: Request, res: Response, next: NextFunction): Promise<void> {
     try {
-      const { age, value } = req.body;
-      const ageData: IAge = { age, value };
+      const { _id, age, value } = req.body;
+      const ageData: IAge = { _id, age, value };
       const ages = await ageService.createAge(ageData);
       res.status(201).json(ages);
     } catch (error) {

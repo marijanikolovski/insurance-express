@@ -3,7 +3,7 @@ import Age from "../models/Age";
 
 class AgeService {
   async createAge(ageData: IAge): Promise<IAge> {
-    try{
+    try {
       const age = new Age(ageData);
       await age.save();
       return age;
@@ -21,6 +21,15 @@ class AgeService {
     }
   }
 
+  async getAgeById(id: string): Promise<IAge | null> {
+    try {
+      const age = await Age.findById(id);
+      return age;
+    } catch (error) {
+      throw new Error('Could not retrieve city');
+    }
+  }
+
 }
 
-export const ageService =  new AgeService();
+export const ageService = new AgeService();

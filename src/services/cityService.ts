@@ -20,6 +20,16 @@ class CityService {
       throw new Error('Could not retrieve cities');
     }
   }
+
+  async getCityById(id: string): Promise<ICity | null> {
+    try {
+      const city = await City.findById(id);
+      return city;
+    } catch (error) {
+      throw new Error('Could not retrieve city');
+    }
+  }
+
 }
 
 export const cityService = new CityService();
