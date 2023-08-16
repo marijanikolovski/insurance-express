@@ -2,6 +2,7 @@ import { Request, Response, request } from 'express';
 import { insuranceWithPriceMatch } from "../services/insuranceWirhriceMatch";
 import { CustomerData } from '../valueObjects/customerData';
 import { ICustomerData } from '../types/customerDataType';
+import { insuranceWithoutPriceMatch } from '../services/insuranceWithoutPriceMatch';
 
 class InsuranceController {
   async calculatePrice(
@@ -36,9 +37,8 @@ class InsuranceController {
       const result = await insuranceWithPriceMatch.calculationWithPriceMatch(customer);
       res.json(result);
     } else {
-      //const result = insuranceWithoutPriceMatch.calculationWithoutPriceMatch(customerData);
-      //res.json(result);
-      res.json('nema unete cene')
+      const result = await insuranceWithoutPriceMatch.calculationWithoutPriceMatch(customer);
+      res.json(result);
     }
   };
 }

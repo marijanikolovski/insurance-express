@@ -20,6 +20,15 @@ class DiscountService {
       throw new Error('Could not retrieve discounts');
     }
   }
+
+  async getDiscountById(id: string): Promise<IDiscount | null> {
+    try {
+      const discount = await Discount.findById(id);
+      return discount;
+    } catch (error) {
+      throw new Error('Could not retrieve discount');
+    }
+  }
 }
 
 export const discountService = new DiscountService();
