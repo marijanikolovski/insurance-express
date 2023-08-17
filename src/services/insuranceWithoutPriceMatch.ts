@@ -12,108 +12,211 @@ class InsuranceWithoutPriceMatch {
   async calculationWithoutPriceMatch(customerData: CustomerData): Promise<Record<string, any>> {
     const noPriceMatchCalculate = new NoPriceMatchCalculation();
     const toArray = noPriceMatchCalculate.toArray();
+    const { cityId, ageId, voucher, coverageId, discountId, vehiclePower } = customerData;
 
-    const selected_coverages = customerData.coverageId;
-    const selected_discounts = customerData.discountId;
+    const selected_coverages = coverageId;
+    const selected_discounts = discountId;
 
     const ages: IAge[] = await ageService.getAllAges();
     const discounts: IDiscount[] = await discountService.getAllDiscoutns();
 
     const coverages_length = selected_coverages.length;
 
-    // Calculation of the basic price based on the city and age
-    const base_price = await basePrice.calculateBasePriceWithoutPriceMatch(
-      customerData.cityId,
-      customerData.ageId
-    );
+    const base_price = await basePrice.calculateBasePriceWithoutPriceMatch(cityId, ageId);
 
     let total_price = base_price;
 
-    // Calculation of coveraage for bonus protection
+    total_price = await this.applyBonusGlassCoverage(
+      total_price,
+      selected_coverages,
+      toArray,
+      'Bonus Protection',
+      base_price,
+    );
+
+    total_price = await this.applyAOCoverage(
+      total_price,
+      selected_coverages,
+      toArray,
+      'AO+',
+      ageId,
+      ages)
+
+    total_price = await this.applyBonusGlassCoverage(
+      total_price,
+      selected_coverages,
+      toArray,
+      'Glass protection',
+      vehiclePower,
+    );
+
+    total_price = await this.applayComercialDiscount(
+      total_price,
+      'Commercial discount',
+      selected_discounts,
+      toArray,
+      base_price)
+
+    total_price = this.applayStrongCarSurchare(
+      total_price,
+      vehiclePower,
+      discounts,
+      toArray,
+      'Strong car surcharge',
+    )
+
+    total_price = this.applayAdviserDiscount(
+      coverages_length,
+      'Adviser discount',
+      discounts,
+      toArray,
+      total_price)
+
+    total_price = this.applaySumerDiscount(
+      total_price,
+      vehiclePower,
+      discounts,
+      toArray,
+      'Summer discount',
+    )
+
+    total_price = this.applayVoucher(
+      voucher,
+      toArray,
+      total_price
+    )
+    return {
+      ...toArray,
+      base_price,
+      total_price,
+    };
+  }
+
+  private async applyBonusGlassCoverage(
+    totalPrice: number,
+    selected_coverages: string[],
+    toArray: Record<string, any>,
+    coverageName: string,
+    calculationValue: number
+  ): Promise<number> {
     for (const coverageId of selected_coverages) {
       const coverage = await coverageService.getCoverageById(coverageId);
-
-      if (coverage?.name === 'Bonus Protection') {
-        toArray.value_bonus_protection = calculateDiscountsCoverages(
-          coverage.value,
-          base_price
-        );
-        total_price += toArray.value_bonus_protection;
+      if (coverage?.name === coverageName) {
+        const coverageTotal = calculateDiscountsCoverages(coverage.value, calculationValue);
+        toArray[`value_${coverageName.toLowerCase().replace(' ', '_')}`] = coverageTotal;
+        totalPrice += coverageTotal;
       }
     }
+    return totalPrice;
+  };
 
-    //Calculation of account coverage if the user is under and over 30 years old
+  private async applyAOCoverage(
+    totalPrice: number,
+    selected_coverages: string[],
+    toArray: Record<string, any>,
+    discountName: string,
+    ageId: string,
+    ages: IAge[]
+  ): Promise<number> {
     for (const coverageId of selected_coverages) {
       const coverage = await coverageService.getCoverageById(coverageId);
-
-      if (coverage?.name === 'AO+') {
-        if (customerData.ageId === ages[0]._id) {
-          toArray.value_AO_user_under30 = coverage.value;
-          total_price += toArray.value_AO_user_under30;
+      if (coverage?.name === discountName) {
+        if (ageId == ages[0]._id) {
+          const coverageTotal = coverage.value;
+          toArray['value_AO_user_under30'] = coverageTotal;
+          totalPrice += coverageTotal;
         } else {
-          toArray.value_AO_user_over30 = coverage.value_user_over30;
-          total_price += toArray.value_AO_user_over30;
+          const coverageTotal = coverage.value_user_over30;
+          toArray['value_AO_user_over30'] = coverageTotal;
+          totalPrice += coverageTotal;
         }
       }
     }
+    return totalPrice;
+  };
 
-    // Calculation of coverage for glass protection
-    for (const coverageId of selected_coverages) {
-      const coverage = await coverageService.getCoverageById(coverageId);
-
-      if (coverage?.name === 'Glass protection') {
-        toArray.value_glass_protection = calculateDiscountsCoverages(
-          coverage.value,
-          customerData.vehiclePower
-        );
-        total_price += toArray.value_glass_protection;
-      }
-    }
-
-    // Calculation of discount for commercial discount
+  private async applayComercialDiscount(
+    totalPrice: number,
+    discountName: string,
+    selected_discounts: string[],
+    toArray: Record<string, any>,
+    basePrice: number,
+  ): Promise<number> {
     for (const discountId of selected_discounts) {
       const discount = await discountService.getDiscountById(discountId)
-
-      if (discount?.name === 'Commercial discount') {
+      if (discount?.name === discountName) {
         toArray.value_commercial_discount = calculateDiscountsCoverages(
           discount.value,
-          base_price
+          basePrice
         );
-        total_price -= toArray.value_commercial_discount;
+        totalPrice -= toArray.value_commercial_discount;
       }
     }
+    return totalPrice;
+  }
 
-    // Calculation of discount for strong car surcharge
-    if (customerData.vehiclePower > 100) {
-      for (const discountBse of discounts) {
-        if (discountBse.name === 'Strong car surcharge') {
-          toArray.value_strong_car_surcharge = calculateDiscountsCoverages(
-            discountBse.value,
-            customerData.vehiclePower
-          );
-          total_price += toArray.value_strong_car_surcharge;
+  private applayStrongCarSurchare(
+    totalPrice: number,
+    vehiclePower: number,
+    discounts: IDiscount[],
+    toArray: Record<string, any>,
+    discountName: string,
+  ): number {
+    if (vehiclePower > 100) {
+      for (const discount of discounts) {
+        if (discount?.name === discountName) {
+          const discoutnTotal = calculateDiscountsCoverages(discount.value, vehiclePower);
+          toArray['value_strong_car_surcharge'] = discoutnTotal;
+          totalPrice += discoutnTotal;
         }
       }
     }
+    return totalPrice;
+  };
 
-    // Calculation of discount for adviser discount
+  private applaySumerDiscount(
+    totalPrice: number,
+    vehiclePower: number,
+    discounts: IDiscount[],
+    toArray: Record<string, any>,
+    discountName: string,
+  ): number {
+    if (vehiclePower > 80) {
+      for (const discount of discounts) {
+        if (discount?.name === discountName) {
+          const discoutnTotal = calculateDiscountsCoverages(discount.value, totalPrice);
+          toArray['value_sumer_discount'] = discoutnTotal;
+          totalPrice -= discoutnTotal;
+        }
+      }
+    }
+    return totalPrice;
+  };
+
+  private applayAdviserDiscount(
+    coverages_length: number,
+    discountName: string,
+    discounts: IDiscount[],
+    toArray: Record<string, any>,
+    totalPrice: number
+  ): number {
     if (coverages_length >= 2) {
       for (const discountBse of discounts) {
-        if (discountBse.name === 'Adviser discount') {
+        if (discountBse.name === discountName) {
           if (toArray.value_bonus_protection) {
             toArray.value_adviser_discount_bonus = calculateDiscountsCoverages(
               discountBse.value,
               toArray.value_bonus_protection
             );
-            total_price -= toArray.value_adviser_discount_bonus;
+            totalPrice -= toArray.value_adviser_discount_bonus;
           }
 
           if (toArray.value_AO_user_under30) {
             toArray.value_adviser_discount_ao_younger = calculateDiscountsCoverages(
               discountBse.value,
-              toArray.value_AO_user_over30
+              toArray.value_AO_user_under30
             );
-            total_price -= toArray.value_adviser_discount_ao_younger;
+            totalPrice -= toArray.value_adviser_discount_ao_younger;
           }
 
           if (toArray.value_AO_user_over30) {
@@ -121,7 +224,7 @@ class InsuranceWithoutPriceMatch {
               discountBse.value,
               toArray.value_AO_user_over30
             );
-            total_price -= toArray.value_adviser_discount_ao_older;
+            totalPrice -= toArray.value_adviser_discount_ao_older;
           }
 
           if (toArray.value_glass_protection) {
@@ -129,48 +232,24 @@ class InsuranceWithoutPriceMatch {
               discountBse.value,
               toArray.value_glass_protection
             );
-            total_price -= toArray.value_adviser_discount_glass_protection;
+            totalPrice -= toArray.value_adviser_discount_glass_protection;
           }
         }
       }
     }
+    return totalPrice;
+  }
 
-    // Calculation of discount for summer discount
-    if (customerData.vehiclePower > 80) {
-      for (const discountBse of discounts) {
-        if (discountBse.name === 'Summer discount') {
-          toArray.value_sumer_discount = calculateDiscountsCoverages(
-            discountBse.value,
-            total_price
-          );
-          total_price -= toArray.value_sumer_discount;
-        }
-      }
+  private applayVoucher(
+    voucher: number,
+    toArray: Record<string, any>,
+    totalPrice: number
+  ): number {
+    if (voucher) {
+      toArray.voucher = voucher;
+      totalPrice -= voucher;
     }
-
-    //The total price minus the value of the voucher
-    if (customerData.voucher) {
-      toArray.voucher = customerData.voucher;
-      total_price -= customerData.voucher;
-    }
-
-    // Return the calculated total price, base price, dicounts and coverages
-    return {
-      value_bonus_protection: toArray.value_bonus_protection,
-      value_AO_user_under30: toArray.value_AO_user_under30,
-      value_AO_user_over30: toArray.value_AO_user_over30,
-      value_glass_protection: toArray.value_glass_protection,
-      value_commercial_discount: toArray.value_commercial_discount,
-      value_strong_car_surcharge: toArray.value_strong_car_surcharge,
-      value_sumer_discount: toArray.value_sumer_discount,
-      value_adviser_discount_bonus: toArray.value_adviser_discount_bonus,
-      value_adviser_discount_ao_younger: toArray.value_adviser_discount_ao_younger,
-      value_adviser_discount_ao_older: toArray.value_adviser_discount_ao_older,
-      value_adviser_discount_glass_protection: toArray.value_adviser_discount_glass_protection,
-      voucher: toArray.voucher,
-      base_price: base_price,
-      total_price: total_price,
-    };
+    return totalPrice;
   }
 }
 
